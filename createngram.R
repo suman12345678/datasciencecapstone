@@ -44,7 +44,7 @@ sampleTwitter<-lineTwitter[sample(1:length(lineTwitter),10000)]
 sampleBlogs<-lineTwitter[sample(1:length(lineBlogs),10000)]
 sampleNews<-lineTwitter[sample(1:length(lineNews),10000)]
 testsample<-c(sampleTwitter,sampleBlogs,sampleNews)
-save(testsample, file="savedtestsample")
+#saveRDS(testsample, file="savedtestsample.rds")
 
 #plot
 #-----
@@ -62,7 +62,7 @@ as.character(cleanSample[[1]])
 cleanSample<-tm_map(cleanSample,content_transformer(tolower))
 cleanSample <- tm_map(cleanSample, content_transformer(removePunctuation))
 cleanSample <- tm_map(cleanSample, content_transformer(removeNumbers))
-urlremove<-function(x)      gsub("[[:alnum:]]*", "", x) 
+#urlremove<-function(x)      gsub("[[:alnum:]]*", "", x) 
 specialcharremove<-function(x)      gsub("[[:punct:]]*", "", x) 
 hashtagremove<- function(x) gsub("#\\S+", "", x)
 twitterremove<- function(x) gsub("@\\S+", "", x)
@@ -105,7 +105,7 @@ cleanSample <- tm_map(cleanSample, stripWhitespace)
 
 
 #create function for ngram
---------------------------
+#--------------------------
 ngramTokenizer <- function(x,n) NGramTokenizer(x,Weka_control(min = n, max = n))
 
 
@@ -118,9 +118,14 @@ tdm1 <- TermDocumentMatrix(cleanSample)
 findFreqTerms(tdm1,1000)
 #sort data on frequency descending
 tdm1freq<- data.frame(word = c(tdm1$dimnames$Terms,rep(NA,length(tdm1$v)-length(tdm1$dimnames$Terms) )), frequency = tdm1$v)
-#sort on frequency descending
-tdd1freq <- plyr::arrange(tdm1freq, -frequency)
+#remove added na values
 tdm1freq<-tdm1freq[complete.cases(tdm1freq),]
+
+#sort on frequency descending
+tdm1freq <- plyr::arrange(tdm1freq, -frequency)
+#take only top 20 words
+tdm1freq<-tdm1freq[1:20,]
+saveRDS(tdm1freq, file="savedtdm1.rds")
 #show the wordcloud for words freq>1000
 wordcloud::wordcloud(cleanSample,min.freq=1000)
 
@@ -133,7 +138,6 @@ wordcloud::wordcloud(cleanSample,min.freq=1000)
 library(RWeka)
 BigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 2))
 tdm2 <- TermDocumentMatrix(cleanSample, control = list(tokenize = BigramTokenizer))
-save(tdm2, file="savedtdm2")
 #see most occuring words
 #findFreqTerms(tdm2,120)
 #make a dataframe with missing term as NA
@@ -142,6 +146,7 @@ tdm2freq<- data.frame(word = c(tdm2$dimnames$Terms,rep(NA,length(tdm2$v)-length(
 tdm2freq <- plyr::arrange(tdm2freq, -frequency)
 #remove add na values
 tdm2freq<-tdm2freq[complete.cases(tdm2freq),]
+saveRDS(tdm2freq, file="savedtdm2.rds")
 
 
 
@@ -152,7 +157,6 @@ library(RWeka)
 trigramTokenizer <- function(x) NGramTokenizer(x,Weka_control(min = 3, max = 3))
 #BigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 2))
 tdm3 <- TermDocumentMatrix(cleanSample, control = list(tokenize = trigramTokenizer))
-save(tdm3, file="savedtdm3")
 #see most occuring words
 findFreqTerms(tdm3,60)
 #make a dataframe with missing term as NA
@@ -161,5 +165,23 @@ tdm3freq<- data.frame(word = c(tdm3$dimnames$Terms,rep(NA,length(tdm3$v)-length(
 tdm3freq <- plyr::arrange(tdm3freq, -frequency)
 #remove add na values
 tdm3freq<-tdm3freq[complete.cases(tdm3freq),]
+saveRDS(tdm3freq, file="savedtdm3.rds")
+
+
+
+#create 4 gram pharess
+#----------------------------
+library(RWeka)
+fourgramTokenizer <- function(x) NGramTokenizer(x,Weka_control(min = 4, max = 4))
+tdm4 <- TermDocumentMatrix(cleanSample, control = list(tokenize = fourgramTokenizer))
+#see most occuring words
+findFreqTerms(tdm4,60)
+#make a dataframe with missing term as NA
+tdm4freq<- data.frame(word = c(tdm4$dimnames$Terms,rep(NA,length(tdm4$v)-length(tdm4$dimnames$Terms) )), frequency = tdm4$v)
+#sort on frequency descending
+tdm4freq <- plyr::arrange(tdm4freq, -frequency)
+#remove add na values
+tdm4freq<-tdm4freq[complete.cases(tdm4freq),]
+saveRDS(tdm4freq, file="savedtdm4.rds")
 
 
