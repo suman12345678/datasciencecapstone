@@ -38,22 +38,18 @@ fileSummary
 
 
 
-#creating sample of 10000
+#creating sample of 150000
 #------------------------
-sampleTwitter<-lineTwitter[sample(1:length(lineTwitter),10000)]
-sampleBlogs<-lineTwitter[sample(1:length(lineBlogs),10000)]
-sampleNews<-lineTwitter[sample(1:length(lineNews),10000)]
+sampleTwitter<-lineTwitter[sample(1:length(lineTwitter),50000)]
+sampleBlogs<-lineTwitter[sample(1:length(lineBlogs),50000)]
+sampleNews<-lineTwitter[sample(1:length(lineNews),50000)]
 testsample<-c(sampleTwitter,sampleBlogs,sampleNews)
 #saveRDS(testsample, file="savedtestsample.rds")
-
-#plot
-#-----
-#library(ggplot2)
-
 
 #creating corpus and clean using tm pkg
 #--------------------------------------
 library(tm)
+#careful consumes huge memory
 cleanSample <- VCorpus(VectorSource(testsample))
 #view one content of VCorpus
 as.character(cleanSample[[1]])
@@ -62,6 +58,8 @@ as.character(cleanSample[[1]])
 cleanSample<-tm_map(cleanSample,content_transformer(tolower))
 cleanSample <- tm_map(cleanSample, content_transformer(removePunctuation))
 cleanSample <- tm_map(cleanSample, content_transformer(removeNumbers))
+urlremove <- function(x) gsub("http[^[:space:]]*", "", x)
+
 #urlremove<-function(x)      gsub("[[:alnum:]]*", "", x) 
 specialcharremove<-function(x)      gsub("[[:punct:]]*", "", x) 
 hashtagremove<- function(x) gsub("#\\S+", "", x)
@@ -70,37 +68,16 @@ twitterremove<- function(x) gsub("@\\S+", "", x)
 #special words remove
 cleanSample <- tm_map(cleanSample, removeWords, c("twitter"))
 
-#testing
-#---------------------------------------
-#a<-"hi this is ### --  $$  ^^  *** suman https://google.com suman@gmail.com "
-#b<-"li jo"
-#a1 <- VCorpus(VectorSource(b))
-#email and sitename remove
-#emailremove <- function(x) {str_replace_all(x,"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+", "")}
-#urlremove <- function(x) gsub("(f|ht)tp(s?)://(.*)[.][a-z]+", "", x)
-#library(stringr)
-#specialcharremove<-function(x)      gsub("[[:punct:]]*", "", x) 
-#a1<-tm_map(a1,content_transformer(specialcharremove))
-#a1<-tm_map(a1,content_transformer(emailremove))
-#a1<-tm_map(a1,content_transformer(urlremove))
-#trigramTokenizer <- function(x) NGramTokenizer(x,Weka_control(min = 3, max = 3))
-#BigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 2))
-#a3 <- TermDocumentMatrix(a1, control = list(tokenize = trigramTokenizer))
-
-#adf<-data.frame(word = a3$dimnames$Terms, frequency = a3$v)
-#atdm<-plyr::arrange(tdmdf, -frequency)
-
-
 
 
 #not working below
-#cleanSample<-tm_map(cleanSample,content_transformer(urlremove))
+cleanSample<-tm_map(cleanSample,content_transformer(urlremove))
 #cleanSample<-tm_map(cleanSample,content_transformer(hashtagremove))
 #cleanSample<-tm_map(cleanSample,content_transformer(twitterremove))
 cleanSample<-tm_map(cleanSample,content_transformer(specialcharremove))
 #cleanSample<-tm_map(cleanSample,content_transformer(twitterwordremove))
-
-#cleanSample <- tm_map(cleanSample, removeWords, stopwords("english"))
+#first I didnot remove stopwords so that pharases are predictable. Now I am removing
+cleanSample <- tm_map(cleanSample, removeWords, stopwords("english"))
 cleanSample <- tm_map(cleanSample, stripWhitespace)
 
 
@@ -112,22 +89,44 @@ ngramTokenizer <- function(x,n) NGramTokenizer(x,Weka_control(min = n, max = n))
 
 #1 gram word making
 #-----------------------------------
-#convert to term document matrix
-tdm1 <- TermDocumentMatrix(cleanSample)
+#convert to term document matrix with removing word <5000 times
+tdm1 <- TermDocumentMatrix(cleanSample,control=list(wordLengths=c(1, 10), 
+                           bounds = list(global = c(5000,Inf))))
+
 #find the words that occurs more than 1000 times
 findFreqTerms(tdm1,1000)
-#sort data on frequency descending
-tdm1freq<- data.frame(word = c(tdm1$dimnames$Terms,rep(NA,length(tdm1$v)-length(tdm1$dimnames$Terms) )), frequency = tdm1$v)
+#sort data on frequency descending for huge TDM
+library(slam)
+freq <- sort(rowSums(as.matrix(rollup(tdm1, 2, FUN = sum)), na.rm = T), decreasing = TRUE)
+tdm1freq<-data.frame(word = names(freq), freq = freq)
+
+
+
+#tdm1freq <- rollup(tdm1, 2, na.rm=TRUE, FUN = sum)
+
+
+
+#a<-data.frame(a=c(slam::row_sums(tdm1, na.rm = T)))
+
+#a <- colapply_simple_triplet_matrix(tdm1,FUN=sum)
+#b <- sort(a, decreasing=T)
+
+
+#tdm1freqt<-as.matrix(tdm1)
+#tdm1freq<-data.frame(word=rownames(tdm1freqt),freq=rowSums(tdm1freqt))
+#a<-sort(tdm1freq,)
+
+#tdm1freq<- data.frame(word = c(tdm1$dimnames$Terms,rep(NA,length(tdm1$v)-length(tdm1$dimnames$Terms) )), frequency = tdm1$v)
 #remove added na values
-tdm1freq<-tdm1freq[complete.cases(tdm1freq),]
+#tdm1freq<-tdm1freq[complete.cases(tdm1freq),]
 
 #sort on frequency descending
-tdm1freq <- plyr::arrange(tdm1freq, -frequency)
+#tdm1freq <- plyr::arrange(tdm1freq, -frequency)
 #take only top 20 words
-tdm1freq<-tdm1freq[1:20,]
+#tdm1freq<-tdm1freq[1:20,]
 saveRDS(tdm1freq, file="savedtdm1.rds")
 #show the wordcloud for words freq>1000
-wordcloud::wordcloud(cleanSample,min.freq=1000)
+#wordcloud::wordcloud(cleanSample,min.freq=1000)
 
 
 
@@ -141,11 +140,17 @@ tdm2 <- TermDocumentMatrix(cleanSample, control = list(tokenize = BigramTokenize
 #see most occuring words
 #findFreqTerms(tdm2,120)
 #make a dataframe with missing term as NA
-tdm2freq<- data.frame(word = c(tdm2$dimnames$Terms,rep(NA,length(tdm2$v)-length(tdm2$dimnames$Terms) )), frequency = tdm2$v)
+freq <- sort(rowSums(as.matrix(rollup(tdm2, 2, FUN = sum)), na.rm = T), decreasing = TRUE)
+tdm2freq<-data.frame(word = names(freq), freq = freq)
+
+
+#tdm2freq<- data.frame(word = c(tdm2$dimnames$Terms,rep(NA,length(tdm2$v)-length(tdm2$dimnames$Terms) )), frequency = tdm2$v)
 #sort on frequency descending
-tdm2freq <- plyr::arrange(tdm2freq, -frequency)
+#tdm2freq <- plyr::arrange(tdm2freq, -frequency)
 #remove add na values
-tdm2freq<-tdm2freq[complete.cases(tdm2freq),]
+#tdm2freqtemp<-tdm2freq[complete.cases(tdm2freq),]
+#remove the phrases occuring less then 3 times
+tdm2freq<-tdm2freq[(tdm2freq$freq>5),]
 saveRDS(tdm2freq, file="savedtdm2.rds")
 
 
@@ -155,16 +160,24 @@ saveRDS(tdm2freq, file="savedtdm2.rds")
 #----------------------------
 library(RWeka)
 trigramTokenizer <- function(x) NGramTokenizer(x,Weka_control(min = 3, max = 3))
-#BigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 2))
 tdm3 <- TermDocumentMatrix(cleanSample, control = list(tokenize = trigramTokenizer))
+
+freq <- sort(rowSums(as.matrix(rollup(tdm3, 2, FUN = sum)), na.rm = T), decreasing = TRUE)
+tdm3freq<-data.frame(word = names(freq), freq = freq)
+
 #see most occuring words
-findFreqTerms(tdm3,60)
+#findFreqTerms(tdm3,60)
 #make a dataframe with missing term as NA
-tdm3freq<- data.frame(word = c(tdm3$dimnames$Terms,rep(NA,length(tdm3$v)-length(tdm3$dimnames$Terms) )), frequency = tdm3$v)
+#freq <- sort(rowSums(as.matrix(rollup(tdm3, 2, FUN = sum)), na.rm = T), decreasing = TRUE)
+#tdm3freq<-data.frame(word = names(freq), freq = freq)
+
+#tdm3freq<- data.frame(word = c(tdm3$dimnames$Terms,rep(NA,length(tdm3$v)-length(tdm3$dimnames$Terms) )), frequency = tdm3$v)
 #sort on frequency descending
-tdm3freq <- plyr::arrange(tdm3freq, -frequency)
+#tdm3freq <- plyr::arrange(tdm3freq, -frequency)
 #remove add na values
-tdm3freq<-tdm3freq[complete.cases(tdm3freq),]
+#tdm3freqtemp<-tdm3freq[complete.cases(tdm3freq),]
+#remove the phrases occuring less then 2 times as I am getting 800 row which is good numer
+tdm3freq<-tdm3freq[(tdm3freq$freq>5),]
 saveRDS(tdm3freq, file="savedtdm3.rds")
 
 
@@ -177,11 +190,37 @@ tdm4 <- TermDocumentMatrix(cleanSample, control = list(tokenize = fourgramTokeni
 #see most occuring words
 findFreqTerms(tdm4,60)
 #make a dataframe with missing term as NA
-tdm4freq<- data.frame(word = c(tdm4$dimnames$Terms,rep(NA,length(tdm4$v)-length(tdm4$dimnames$Terms) )), frequency = tdm4$v)
+freq <- sort(rowSums(as.matrix(rollup(tdm4, 2, FUN = sum)), na.rm = T), decreasing = TRUE)
+tdm4freq<-data.frame(word = names(freq), freq = freq)
+
+#tdm4freq<- data.frame(word = c(tdm4$dimnames$Terms,rep(NA,length(tdm4$v)-length(tdm4$dimnames$Terms) )), frequency = tdm4$v)
 #sort on frequency descending
-tdm4freq <- plyr::arrange(tdm4freq, -frequency)
+#tdm4freq <- plyr::arrange(tdm4freq, -frequency)
 #remove add na values
-tdm4freq<-tdm4freq[complete.cases(tdm4freq),]
+#tdm4freqtemp<-tdm4freq[complete.cases(tdm4freq),]
+#remove the phrases occuring less then 2 times getting 300 rows
+tdm4freq<-tdm4freq[(tdm4freq$freq>1),]
 saveRDS(tdm4freq, file="savedtdm4.rds")
+
+
+#create 5 gram pharess
+#----------------------------
+library(RWeka)
+fivegramTokenizer <- function(x) NGramTokenizer(x,Weka_control(min = 5, max = 5))
+tdm5 <- TermDocumentMatrix(cleanSample, control = list(tokenize = fivegramTokenizer))
+#see most occuring words
+findFreqTerms(tdm5,60)
+#make a dataframe with missing term as NA
+freq <- sort(rowSums(as.matrix(rollup(tdm5, 2, FUN = sum)), na.rm = T), decreasing = TRUE)
+tdm5freq<-data.frame(word = names(freq), freq = freq)
+
+#tdm5freq<- data.frame(word = c(tdm5$dimnames$Terms,rep(NA,length(tdm5$v)-length(tdm5$dimnames$Terms) )), frequency = tdm5$v)
+#sort on frequency descending
+#tdm5freq <- plyr::arrange(tdm5freq, -frequency)
+#remove add na values
+#tdm5freqtemp<-tdm5freq[complete.cases(tdm5freq),]
+#remove the phrases occuring less then 2 times getting 130 rows
+tdm5freq<-tdm5freq[(tdm5freq$freq>1),]
+saveRDS(tdm5freq, file="savedtdm5.rds")
 
 
