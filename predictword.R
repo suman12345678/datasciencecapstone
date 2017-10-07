@@ -22,33 +22,38 @@ if(!exists("savedtdm5")){
 #clean input proc
 #------------------------------
 cleaninput<-function(xx){
+  #trim and make to lower case
+  xx<-trimws(tolower(xx))
+  library(tm)
+  mystopwords<-c("a","an","the")
+  nostopword<-c()
+  x<-unlist(strsplit(xx," "))
+  
+  #**for english stopword removal
+  xx<-x[!x %in% stopwords(kind="en")]
+  
+  #for mystopeord removal
+  #xx<-x[!x %in% mystopwords]
+  
+  #for nostopword
+  #xx<-x[!x %in% nostopword]
+  
+  #convert to string
+  xx<-paste(xx,collapse = " ")
+  if (length(xx)==0) xx<-""
+  
+  #print(xx)
   # remove non-word charactters from user input
   charsToClean <- c("[:cntrl:]", "[:punct:]")
   for (i in 1:length(charsToClean)){
-    xx <- gsub(paste0("[", charsToClean[i], "]"),  " ", xx, fixed=FALSE)
+    xx <- gsub(paste0("[", charsToClean[i], "]"),  "", xx, fixed=FALSE)
   }
+  #print(xx)
   xx
 }
 
 
 
-# break user input of n words to 1,2,3,4 words and create list xgram maybe not required
-#-------------------------------------------------------------------
-splitinput<-function(xx,n=1:4){
-  xgramRange <- (n - 1)
-  xgramRange <- xgramRange[xgramRange > 0]
-  xgrams <- lapply(xgramRange, function(n) {
-    if (n > 0) {
-      # xgram regex matches 1 .. n-1 words
-      xgram <- regmatches(xx, regexec(paste0("^.*\\b(", paste(rep("\\w+ +", n-1), collapse=""), "\\w+) *$"), xx))
-      # drop first element i.e inputText, keep only the words part
-      xgram[[1]][-1]
-    }
-  else character(0)
-  })
-  xgrams
-}  
-  
 #ngram common module pass user input and vector of words formed
 #-------------------------------------------------------------
 ngram<-function(word,noofpred,gram){
@@ -70,7 +75,7 @@ ngram<-function(word,noofpred,gram){
     return(matches)
   }
   
-  #take the last gram-1 word from the user input for gram > 1 
+  #take the last gram-1 word from the user input for gram > 1 and reduce size of word 
   for (j in 1:(gram-1)){
     #print("debug")
     #print(j)
@@ -80,15 +85,43 @@ ngram<-function(word,noofpred,gram){
   }
   word<-temp
   #word<-paste(x[[1]][len-2],x[[1]][len-1],x[[1]][len],sep=" ")
-  for(i in 1:nrow(file)){
-    if (grepl(paste0('\\<',word," "), as.vector(file[i,1]))) {
-      aa<-strsplit(as.vector(file[i,1]), " ")
-      matches<-c(matches,aa[[1]][gram])
-      #vec<-c(vec,matches)
-      if(length(matches)==noofpred) break
-    }  
+  
+  #search in ngram this taking time
+  #for(i in 1:nrow(file)){
+    #print(word)
+  #  if (grepl(paste0('\\<',word," "), as.vector(file[i,1]))) {
+  #    aa<-strsplit(as.vector(file[i,1]), " ")
+  #    matches<-c(matches,aa[[1]][gram])
+  #    if(length(matches)==noofpred) break
+  #  }  
+  #}
+  
+  #search in ngram with lapply
+  fun<-function(x,word){
+    #print("search in 2")
+    #print(word)
+    #print(x)
+    if(grepl(paste0('\\<',word," "),x)){
+      aa<-strsplit(as.vector(x)," ")
+      x<-c(aa[[1]][length(aa[[1]])])
+      #print("match found so pass")
+      #print(aa)
+    }
+    else x<-c(NA)
+    x
   }
-  #vec
+  t<-as.vector(file[,1])
+  t1<-lapply(t,fun,word=word)
+  t2<-as.vector(t1)
+  t3<-t2[!is.na(t2)]
+  #print("match obj")
+  #print(gram)
+  #print(t3)
+  if (length(t3)>noofpred) matches<-t3[1:noofpred]
+  else matches<-t3
+  
+  
+  
   matches
 }
 
@@ -105,8 +138,8 @@ ngram<-function(word,noofpred,gram){
 
 
 
-#predict next word 
-#--------------------
+#predict next word with input as sentence or word and no of pred
+#----------------------------------------------------------------
 predictnextword<-function(xx,noofpred=5){
   xx<-cleaninput(xx)
   len<-length(strsplit(xx," ")[[1]])
@@ -118,99 +151,44 @@ predictnextword<-function(xx,noofpred=5){
   vec<-c()
   #print(len)
   if (len>=4){
-    vec<-ngram(xx,noofpred,5)
     #print("checking in 5")
+    vec<-ngram(xx,noofpred,5)
     #print(vec)
   }
   #if(len>=3 & length(vec)<noofpred){
-  if(len>=3 & is.null(vec)){
-    vec<-ngram(xx,noofpred,4)
+  if(len>=3 & (length(vec)<noofpred)){
     #print("checking in 4")
+    tmp<-ngram(xx,noofpred,4)
+    vec<-c(vec,tmp)
+    #print("from 4")
     #print(vec)
   }  
   #if(len>=2 & length(vec)<noofpred){
-  if(len>=2 & is.null(vec)){
-    vec<-ngram(xx,noofpred,3) 
+  if(len>=2 & (length(vec)<noofpred)){
+    tmp<-ngram(xx,noofpred,3)
     #print("checking in 3")
+    vec<-c(vec,tmp) 
+    #print("from 3")
     #print(vec)
   }  
   #if(len>=1 & length(vec)<noofpred){
-  if(len>=1 & is.null(vec)){
+  if(len>=1 & (length(vec)<noofpred)){
     #print("checking in 2")
-    vec<-ngram(xx,noofpred,2) 
+    tmp<-ngram(xx,noofpred,2)
+    vec<-c(vec,tmp) 
+    #print("from 2")
     #print(vec)
   }
-  if(is.null(vec)){
+  if(length(vec)<noofpred){
     #print("checking in 1")
-    vec<-ngram(xx,noofpred,1) 
+    tmp<-ngram(xx,noofpred,1) 
+    vec<-c(vec,tmp)
     #print(vec)
   }
+  if (length(vec)>noofpred) vec<-vec[1:noofpred]
+  #get unique
+  vec<-unique(vec)
+  
+  
   vec
 }  
-
-#for(i in 1:nrow(savedtdm1)){
-#  print(as.vector(savedtdm1[i,1]))
-#  if(as.vector(savedtdm1=="supports")) print("yesss")
-#}  
-
-#check in 2 gram with user input 1)text 2)no of pred
-#----------------------------------------------------
-twogram<-function(word,noofpred){
-  matches<-c()
-  #take last 1 word from user
-  x<-strsplit(word," ")
-  len<-length(x[[1]])
-  word<-x[[1]][len]
-  for(i in 1:nrow(savedtdm2)){
-    #print(as.vector(savedtdm2[i,1]))
-    if (grepl(paste0('\\<',word," "), as.vector(savedtdm2[i,1]))) {
-      aa<-strsplit(as.vector(savedtdm2[i,1]), " ")
-      #print("yes")
-      #break
-      matches<-c(matches,aa[[1]][2])
-      #print(aa)
-      #print(class(aa))
-      #print(matches)
-      if(length(matches)==noofpred) break
-    }  
-  }
-  matches
-}
-
-#check in 3 gram with user input 1)text 2)no of pred
-#----------------------------------------------------
-threegram<-function(word,noofpred){
-    matches<-c()
-    #take last 2 words from user
-    x<-strsplit(word," ")
-    len<-length(x[[1]])
-    word<-paste(x[[1]][len-1],x[[1]][len],sep=" ")
-    for(i in 1:nrow(savedtdm3)){
-      if (grepl(paste0('\\<',word," "), as.vector(savedtdm3[i,1]))) {
-        aa<-strsplit(as.vector(savedtdm3[i,1]), " ")
-        matches<-c(matches,aa[[1]][3])
-        if(length(matches)==noofpred) break
-      }  
-    }
-    matches
-}
-
-#check in 4 gram with user input 1)text 2)no of pred
-#----------------------------------------------------
-fourgram<-function(word,noofpred){
-    matches<-c()
-    #take last 3 words from user
-    x<-strsplit(word," ")
-    len<-length(x[[1]])
-    word<-paste(x[[1]][len-2],x[[1]][len-1],x[[1]][len],sep=" ")
-    for(i in 1:nrow(savedtdm4)){
-      if (grepl(paste0('\\<',word," "), as.vector(savedtdm4[i,1]))) {
-        aa<-strsplit(as.vector(savedtdm4[i,1]), " ")
-        matches<-c(matches,aa[[1]][4])
-        if(length(matches)==noofpred) break
-      }  
-    }
-    matches
-}
-
-
