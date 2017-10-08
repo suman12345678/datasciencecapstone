@@ -119,7 +119,7 @@ ngram<-function(word,noofpred,gram){
   #print(t3)
   if (length(t3)>noofpred) matches<-t3[1:noofpred]
   else matches<-t3
-  
+  #rm(t,t1,t2,t3,temp)
   
   
   matches
@@ -189,6 +189,7 @@ predictnextword<-function(xx,noofpred=5){
   #get unique
   vec<-unique(vec)
   
-  
+  #print("check variable")
+  #print(ls())
   vec
 }  
